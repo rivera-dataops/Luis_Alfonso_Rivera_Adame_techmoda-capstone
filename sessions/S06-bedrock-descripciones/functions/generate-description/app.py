@@ -31,6 +31,8 @@ PRODUCTS_TABLE = os.environ["PRODUCTS_TABLE"]
 MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-haiku-4-5-20251001-v1:0")
 MAX_TOKENS = int(os.environ.get("BEDROCK_MAX_TOKENS", "300"))
 TEMPERATURE = float(os.environ.get("BEDROCK_TEMPERATURE", "0.7"))
+GUARDRAIL_ID = os.environ.get("BEDROCK_GUARDRAIL_ID")
+GUARDRAIL_VERSION = os.environ.get("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
 
 bedrock = boto3.client("bedrock-runtime")
 table = boto3.resource("dynamodb").Table(PRODUCTS_TABLE)
@@ -105,11 +107,17 @@ def lambda_handler(event, context):
     prompt = _build_prompt(item, tone)
 
     try:
-        resp = bedrock.converse(
-            modelId=MODEL_ID,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": MAX_TOKENS, "temperature": TEMPERATURE},
-        )
+        kwargs = {
+            "modelId": MODEL_ID,
+            "messages": [{"role": "user", "content": [{"text": prompt}]}],
+            "inferenceConfig": {"maxTokens": MAX_TOKENS, "temperature": TEMPERATURE},
+        }
+        if GUARDRAIL_ID:
+            kwargs["guardrailConfig"] = {
+                "guardrailIdentifier": GUARDRAIL_ID,
+                "guardrailVersion": GUARDRAIL_VERSION,
+            }
+        resp = bedrock.converse(**kwargs)
         text = resp["output"]["message"]["content"][0]["text"].strip()
         usage = resp.get("usage", {})
     except Exception as e:  # noqa: BLE001

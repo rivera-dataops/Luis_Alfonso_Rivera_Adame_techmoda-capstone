@@ -29,6 +29,8 @@ EMBED_MODEL_ID = os.environ.get("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0"
 CHAT_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-haiku-4-5-20251001-v1:0")
 TOP_K = int(os.environ.get("ASSISTANT_TOP_K", "3"))
 MAX_TOKENS = int(os.environ.get("BEDROCK_MAX_TOKENS", "400"))
+GUARDRAIL_ID = os.environ.get("BEDROCK_GUARDRAIL_ID")
+GUARDRAIL_VERSION = os.environ.get("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
 
 SYSTEM_PROMPT = (
     "Sos el asistente de compras de TechModa, una tienda de moda. Respondé en español, "
@@ -104,6 +106,7 @@ def _build_messages(history, message, context_block):
         if role in ("user", "assistant") and text:
             messages.append({"role": role, "content": [{"text": text}]})
     # Mensaje actual con el contexto recuperado inyectado (grounding).
+
     user_text = (
         f"CATÁLOGO RELEVANTE:\n{context_block}\n\n"
         f"PREGUNTA DEL CLIENTE: {message}"
@@ -128,12 +131,19 @@ def lambda_handler(event, context):
         products = _retrieve(message, TOP_K)
         context_block = _format_context(products)
         messages = _build_messages(history, message, context_block)
-        resp = bedrock.converse(
-            modelId=CHAT_MODEL_ID,
-            system=[{"text": SYSTEM_PROMPT}],
-            messages=messages,
-            inferenceConfig={"maxTokens": MAX_TOKENS, "temperature": 0.5},
-        )
+        
+        kwargs = {
+            "modelId": CHAT_MODEL_ID,
+            "system": [{"text": SYSTEM_PROMPT}],
+            "messages": messages,
+            "inferenceConfig": {"maxTokens": MAX_TOKENS, "temperature": 0.5},
+        }
+        if GUARDRAIL_ID:
+            kwargs["guardrailConfig"] = {
+                "guardrailIdentifier": GUARDRAIL_ID,
+                "guardrailVersion": GUARDRAIL_VERSION,
+            }
+        resp = bedrock.converse(**kwargs)
         reply = resp["output"]["message"]["content"][0]["text"].strip()
         usage = resp.get("usage", {})
     except Exception as e:  # noqa: BLE001

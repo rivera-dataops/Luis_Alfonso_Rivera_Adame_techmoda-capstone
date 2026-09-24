@@ -27,10 +27,13 @@ Globals:
     MemorySize: 1024
     Runtime: nodejs22.x
     Tracing: Active
+    Tags:
+      Project: techmoda-ai-capstone
+      Module: ai-practitioner
+      Environment: sandbox
     Environment:
       Variables:
         PRODUCTS_TABLE: !Ref ProductsTable
-
 Resources:
   # DynamoDB Table
   ProductsTable:
@@ -62,21 +65,256 @@ Resources:
             TableName: !Ref ProductsTable
       FunctionUrlConfig:
         AuthType: NONE
-        Cors:
-          AllowOrigins:
-            - "*"
-          AllowMethods:
-            - "*"
-          AllowHeaders:
-            - "*"
+
 
   # ---------------------------------------------------------------------------
   # Frontend estático (S3 + CloudFront).
   # ---------------------------------------------------------------------------
+  EnrichLabelsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-EnrichLabels
+      Description: S1 - Auto-etiquetado de imagenes de producto (Rekognition DetectLabels)
+      CodeUri: sessions/S01-rekognition-labels/functions/enrich-labels
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action: rekognition:DetectLabels
+              Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub arn:${AWS::Partition}:s3:::${AWS::StackName}-*/*
+      Environment:
+        Variables:
+          LABEL_MIN_CONFIDENCE: "80"
+          LABEL_MAX_LABELS: "15"
+      FunctionUrlConfig:
+        AuthType: NONE
+
+  ModerateImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-ModerateImage
+      Description: S2 - Moderacion de imagen + alt-text accesible (Rekognition)
+      CodeUri: sessions/S02-moderation-alttext/functions/moderate-image
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rekognition:DetectModerationLabels
+                - rekognition:DetectLabels
+              Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub arn:${AWS::Partition}:s3:::${AWS::StackName}-*/*
+      Environment:
+        Variables:
+          MODERATION_MIN_CONFIDENCE: "60"
+      FunctionUrlConfig:
+        AuthType: NONE
+
+  AnalyzeSentimentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-AnalyzeSentiment
+      Description: S3 - Sentimiento de resenas (Amazon Comprehend)
+      CodeUri: sessions/S03-comprehend-sentiment/functions/analyze-sentiment
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - comprehend:DetectSentiment
+                - comprehend:DetectDominantLanguage
+              Resource: "*"
+      FunctionUrlConfig:
+        AuthType: NONE
+        
+  TranslateCatalogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-TranslateCatalog
+      Description: S4 - Catalogo multilingue ES/EN (Amazon Translate)
+      CodeUri: sessions/S04-translate-multilang/functions/translate-catalog
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - translate:TranslateText
+                - comprehend:DetectDominantLanguage
+              Resource: "*"
+      FunctionUrlConfig:
+        AuthType: NONE
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-audio
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireAudio
+            Status: Enabled
+            ExpirationInDays: 7
+
+  SynthesizeVoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-SynthesizeVoice
+      Description: S5 - Descripcion por voz / accesibilidad (Amazon Polly)
+      CodeUri: sessions/S05-polly-voice/functions/synthesize-voice
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action: polly:SynthesizeSpeech
+              Resource: "*"
+        - S3CrudPolicy:
+            BucketName: !Ref AudioBucket
+      Environment:
+        Variables:
+          AUDIO_BUCKET: !Ref AudioBucket
+      FunctionUrlConfig:
+        AuthType: NONE
+        
+  GenerateDescriptionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-GenerateDescription
+      Description: S6 - Generar descripciones de producto (Bedrock / GenAI)
+      CodeUri: sessions/S06-bedrock-descripciones/functions/generate-description
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                - !Sub arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:ApplyGuardrail
+              Resource: !Sub arn:${AWS::Partition}:bedrock:us-east-1:${AWS::AccountId}:guardrail/0lk4bxdujw2r
+      Timeout: 60
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: us.anthropic.claude-haiku-4-5-20251001-v1:0
+          BEDROCK_MAX_TOKENS: "300"
+          BEDROCK_TEMPERATURE: "0.7"
+          BEDROCK_GUARDRAIL_ID: "0lk4bxdujw2r"
+          BEDROCK_GUARDRAIL_VERSION: "1"
+      FunctionUrlConfig:
+        AuthType: NONE
+
+  IndexEmbeddingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-IndexEmbeddings
+      Description: S7 - Construye el indice de embeddings del catalogo (Bedrock Titan)
+      CodeUri: sessions/S07-bedrock-rag-busqueda/functions/index-embeddings
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: !Sub arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0
+      Timeout: 120
+      Environment:
+        Variables:
+          EMBED_MODEL_ID: amazon.titan-embed-text-v2:0
+      FunctionUrlConfig:
+        AuthType: NONE
+
+  SemanticSearchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-SemanticSearch
+      Description: S7 - Busqueda semantica del catalogo (Bedrock Titan)
+      CodeUri: sessions/S07-bedrock-rag-busqueda/functions/semantic-search
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: !Sub arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0
+      Timeout: 60
+      Environment:
+        Variables:
+          EMBED_MODEL_ID: amazon.titan-embed-text-v2:0
+          SEARCH_TOP_K: "5"
+      FunctionUrlConfig:
+        AuthType: NONE
+  
+  ShoppingAssistantFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-ShoppingAssistant
+      Description: S8 - Asistente de compras conversacional (Bedrock RAG)
+      CodeUri: sessions/S08-bedrock-chatbot/functions/shopping-assistant
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProductsTable
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0
+                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                - !Sub arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:ApplyGuardrail
+              Resource: !Sub arn:${AWS::Partition}:bedrock:us-east-1:${AWS::AccountId}:guardrail/0lk4bxdujw2r
+      Timeout: 60
+      Environment:
+        Variables:
+          EMBED_MODEL_ID: amazon.titan-embed-text-v2:0
+          BEDROCK_MODEL_ID: us.anthropic.claude-haiku-4-5-20251001-v1:0
+          ASSISTANT_TOP_K: "3"
+          BEDROCK_MAX_TOKENS: "400"
+          BEDROCK_GUARDRAIL_ID: "0lk4bxdujw2r"
+          BEDROCK_GUARDRAIL_VERSION: "1"
+      FunctionUrlConfig:
+        AuthType: NONE
+
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-frontend
+      BucketName: !Sub ${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-frontend
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: index.html
@@ -97,39 +335,6 @@ Resources:
             Resource: !Sub ${FrontendBucket.Arn}/*
             Principal: '*'
 
-  FrontendDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        DefaultRootObject: index.html
-        Origins:
-          - Id: S3Origin
-            DomainName: !GetAtt FrontendBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: ''
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods:
-            - GET
-            - HEAD
-            - OPTIONS
-          CachedMethods:
-            - GET
-            - HEAD
-          ForwardedValues:
-            QueryString: false
-            Cookies:
-              Forward: none
-        CustomErrorResponses:
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-
 Outputs:
   ApiUrl:
     Description: Base API URL (Lambda Function URL del router CRUD). Termina en '/'.
@@ -141,11 +346,39 @@ Outputs:
     Description: AWS Region
     Value: !Ref AWS::Region
   FrontendUrl:
-    Description: CloudFront URL for the frontend
-    Value: !Sub 'https://${FrontendDistribution.DomainName}'
+    Description: S3 static website URL (HTTP; CloudFront disabled in workshop)
+    Value: !GetAtt FrontendBucket.WebsiteURL
   FrontendBucketName:
     Description: S3 Bucket name for frontend
     Value: !Ref FrontendBucket
+  EnrichLabelsUrl:
+    Description: S1 Function URL
+    Value: !GetAtt EnrichLabelsFunctionUrl.FunctionUrl
+  ModerateImageUrl:
+    Description: S2 Function URL
+    Value: !GetAtt ModerateImageFunctionUrl.FunctionUrl
+  AnalyzeSentimentUrl:
+    Description: S3 Function URL
+    Value: !GetAtt AnalyzeSentimentFunctionUrl.FunctionUrl
+  TranslateCatalogUrl:
+    Description: S4 Function URL
+    Value: !GetAtt TranslateCatalogFunctionUrl.FunctionUrl
+  SynthesizeVoiceUrl:
+    Description: S5 Function URL
+    Value: !GetAtt SynthesizeVoiceFunctionUrl.FunctionUrl
+  GenerateDescriptionUrl:
+    Description: S6 Function URL
+    Value: !GetAtt GenerateDescriptionFunctionUrl.FunctionUrl
+  IndexEmbeddingsUrl:
+    Description: S7 Index Function URL
+    Value: !GetAtt IndexEmbeddingsFunctionUrl.FunctionUrl
+  SemanticSearchUrl:
+    Description: S7 Search Function URL
+    Value: !GetAtt SemanticSearchFunctionUrl.FunctionUrl
+
+  ShoppingAssistantUrl:
+    Description: S8 Function URL
+    Value: !GetAtt ShoppingAssistantFunctionUrl.FunctionUrl
 
 Metadata:
   AWS::Composer::Groups:

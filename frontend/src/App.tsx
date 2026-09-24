@@ -4,7 +4,7 @@ import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { useProducts } from './hooks/useProducts';
 import type { Product } from './lib/types';
-
+import { AiWorkspace } from './components/AiWorkspace';
 function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -121,6 +121,7 @@ function App() {
           )}
         </div>
 
+<AiWorkspace products={products} />
         {loading ? (
           // role="status" + aria-live: un lector de pantalla anuncia la carga.
           <div role="status" aria-live="polite" className="flex items-center justify-center py-20">
