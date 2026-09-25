@@ -1,3 +1,20 @@
+<!-- entrega-techmoda-luis -->
+# TechModa — Luis Alfonso Rivera Adame
+
+Capstone: catálogo inteligente serverless en AWS con React, Lambda,
+DynamoDB y Amazon Bedrock. Integra visión, sentimiento, traducción,
+voz, búsqueda semántica y un asistente de compras con RAG.
+
+- [Demo funcional (HTTP)](http://techmoda-mxmex35-luisxplayer-frontend.s3-website-us-east-1.amazonaws.com/)
+- [Arquitectura, pruebas y notas de esta entrega](docs/ENTREGA_LUIS.md)
+- Proyecto desarrollado sobre la base del [workshop TechModa](https://github.com/gabanox/techmoda-ai-capstone).
+
+**Despliegue:** el script heredado `techmoda-tools/deploy.sh` apunta al bucket
+del stack `techmoda-ai`, no al bucket de esta entrega. Revisar las notas antes
+de volver a publicar. Las credenciales AWS y la configuración runtime son locales.
+
+---
+
 # TechModa AI — Capstone AWS re/Start · AI Practitioner (AIF-C01)
 
 > **Bootcamp Institute · AWS re/Start**

@@ -38,7 +38,6 @@ def _response(status, body):
         "statusCode": status,
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
         },
         "body": json.dumps(body, ensure_ascii=False),
     }

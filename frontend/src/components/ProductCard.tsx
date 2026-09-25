@@ -1,4 +1,5 @@
-import { ShoppingCart, Package } from 'lucide-react';
+import { useState } from 'react';
+import { ShoppingCart, Package, ImageOff } from 'lucide-react';
 import type { Product } from '../lib/types';
 
 interface ProductCardProps {
@@ -6,35 +7,40 @@ interface ProductCardProps {
   onEdit?: (product: Product) => void;
   onDelete?: (productId: string) => void;
   isAdmin?: boolean;
+  onAdd?: (product: Product) => void;
+  onView?: (product: Product) => void;
 }
 
-export function ProductCard({ product, onEdit, onDelete, isAdmin }: ProductCardProps) {
+export function ProductCard({ product, onEdit, onDelete, isAdmin, onAdd, onView }: ProductCardProps) {
+  const [failedSource, setFailedSource] = useState('');
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-105">
-      <div className="aspect-square overflow-hidden bg-gray-100">
-        <img
+    <article className="product-card group">
+      <div className="product-image-wrap">
+        {(!product.imageUrl || failedSource === product.imageUrl) ? <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400"><ImageOff size={32} /><span className="text-sm">Imagen no disponible</span></div> : <img
           src={product.imageUrl}
-          alt={product.name}
-          className="w-full h-full object-cover"
-        />
+          alt={product.altText || product.aiAltText || product.name}
+          className="product-image"
+          loading="lazy"
+          onError={() => setFailedSource(product.imageUrl)}
+        />}
       </div>
-      <div className="p-5">
-        <div className="flex items-start justify-between mb-2">
-          <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
+      <div className="flex flex-1 flex-col p-5 sm:p-6">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h3 className="line-clamp-2 text-lg font-semibold tracking-tight text-slate-950">
             {product.name}
           </h3>
-          <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">
+          <span className="category-pill">
             {product.category}
           </span>
         </div>
-        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+        <p className="mb-5 line-clamp-2 text-sm leading-6 text-slate-500">
           {product.description}
         </p>
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-2xl font-bold text-gray-900">
+        <div className="mt-auto flex items-center justify-between mb-4">
+          <span className="text-2xl font-semibold tracking-tight text-slate-950">
             ${product.price.toFixed(2)}
           </span>
-          <div className="flex items-center gap-1 text-sm text-gray-500">
+          <div className="flex items-center gap-1 text-xs font-medium text-slate-400">
             <Package className="w-4 h-4" />
             <span>{product.stock} disponibles</span>
           </div>
@@ -43,31 +49,35 @@ export function ProductCard({ product, onEdit, onDelete, isAdmin }: ProductCardP
           <div className="flex gap-2">
             <button
               onClick={() => onEdit?.(product)}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="btn-primary flex-1"
             >
               Editar
             </button>
             <button
               onClick={() => onDelete?.(product.productId)}
-              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              className="flex-1 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700"
             >
               Eliminar
             </button>
           </div>
         ) : (
+          <div className="space-y-2">
+          {onView && <button className="btn-secondary w-full" onClick={() => onView(product)}>Ver detalles</button>}
           <button
-            disabled={product.stock === 0}
-            className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+            onClick={() => onAdd?.(product)}
+            disabled={product.stock <= 0}
+            className={`btn-primary w-full ${
               product.stock === 0
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'bg-slate-200 text-slate-500 hover:bg-slate-200'
+                : ''
             }`}
           >
             <ShoppingCart className="w-4 h-4" />
             {product.stock === 0 ? 'Agotado' : 'Agregar al Carrito'}
           </button>
+          </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }

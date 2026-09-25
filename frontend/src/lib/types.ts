@@ -31,4 +31,7 @@ export interface Product {
   aiAudioUrl?: string;              // S5 · Polly (URL prefirmada)
   aiDescription?: string;           // S6 · Bedrock
   aiEmbedding?: number[];           // S7 · Bedrock embeddings
+  altText?: string;
+  moderationStatus?: 'APPROVED' | 'FLAGGED';
+  translations?: Record<string, { name: string; description: string }>;
 }

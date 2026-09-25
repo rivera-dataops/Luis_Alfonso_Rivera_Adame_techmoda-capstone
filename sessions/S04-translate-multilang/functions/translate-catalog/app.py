@@ -29,7 +29,7 @@ table = boto3.resource("dynamodb").Table(PRODUCTS_TABLE)
 def _response(status, body):
     return {
         "statusCode": status,
-        "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+        "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, ensure_ascii=False),
     }
 

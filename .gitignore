@@ -34,3 +34,27 @@ logs/
 __pycache__/
 *.pyc
 .build/
+
+# Entrega TechModa Luis: archivos locales y generados
+node_modules/
+dist/
+.aws-sam/
+.aws/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+frontend/public/env-config.js
+*.pem
+*.key
+*.zip
+*.tar.gz
+.techmoda-backups/
+respaldo-*/
+respaldo-cors-*/
+/techmoda-luis-restaurar/
+/techmoda-mejora/
+/preparar-github.py

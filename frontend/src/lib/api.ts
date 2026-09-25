@@ -4,7 +4,7 @@ import type { Product } from './types';
 declare global {
   interface Window {
     __ENV?: {
-      VITE_API_URL?: string;
+      [key: string]: string | undefined;
     };
   }
 }

@@ -46,7 +46,7 @@ table = boto3.resource("dynamodb").Table(PRODUCTS_TABLE)
 def _response(status, body):
     return {
         "statusCode": status,
-        "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+        "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, ensure_ascii=False),
     }
 
@@ -126,6 +126,9 @@ def lambda_handler(event, context):
     if not message:
         return _response(400, {"error": "Enviá 'message' con la consulta del cliente."})
     history = body.get("history", [])
+    if not isinstance(history, list):
+        return _response(400, {"error": "El historial debe ser una lista."})
+    history = [turn for turn in history[-10:] if isinstance(turn, dict)]
 
     try:
         products = _retrieve(message, TOP_K)
@@ -146,6 +149,7 @@ def lambda_handler(event, context):
         resp = bedrock.converse(**kwargs)
         reply = resp["output"]["message"]["content"][0]["text"].strip()
         usage = resp.get("usage", {})
+        blocked = resp.get("stopReason") in ("guardrail_intervened", "content_filtered")
     except Exception as e:  # noqa: BLE001
         print("Bedrock error:", repr(e))
         return _response(
@@ -161,7 +165,8 @@ def lambda_handler(event, context):
         200,
         {
             "reply": reply,
-            "retrieved": [{"productId": p["productId"], "name": p.get("name", "")} for p in products],
+            "retrieved": [] if blocked else [{"productId": p["productId"], "name": p.get("name", "")} for p in products],
+            "blocked": blocked,
             "model": CHAT_MODEL_ID,
             "usage": usage,
         },

@@ -32,7 +32,7 @@ table = boto3.resource("dynamodb").Table(PRODUCTS_TABLE)
 def _response(status, body):
     return {
         "statusCode": status,
-        "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+        "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, ensure_ascii=False),
     }
 
@@ -44,7 +44,7 @@ def _text_for(item, lang):
         tr = (item.get("translations") or {}).get("en") or {}
         name = tr.get("name", name)
         desc = tr.get("description", desc)
-    return f"{name}. {desc}".strip()
+    return ". ".join(part.strip() for part in (name, desc) if part.strip())
 
 
 def _path_id(event):
@@ -81,6 +81,8 @@ def lambda_handler(event, context):
         return _response(400, {"error": "Body JSON inválido."})
 
     lang = (body.get("lang") or "es").lower()
+    if lang not in VOICES:
+        return _response(400, {"error": "El idioma debe ser es o en."})
     voice = VOICES.get(lang, VOICES["es"])
 
     item = table.get_item(Key={"productId": product_id}).get("Item")

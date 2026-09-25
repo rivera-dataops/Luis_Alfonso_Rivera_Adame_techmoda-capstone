@@ -95,6 +95,12 @@ Resources:
           LABEL_MAX_LABELS: "15"
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
 
   ModerateImageFunction:
     Type: AWS::Serverless::Function
@@ -122,6 +128,12 @@ Resources:
           MODERATION_MIN_CONFIDENCE: "60"
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
 
   AnalyzeSentimentFunction:
     Type: AWS::Serverless::Function
@@ -142,6 +154,12 @@ Resources:
               Resource: "*"
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
         
   TranslateCatalogFunction:
     Type: AWS::Serverless::Function
@@ -162,6 +180,12 @@ Resources:
               Resource: "*"
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
   AudioBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -199,6 +223,12 @@ Resources:
           AUDIO_BUCKET: !Ref AudioBucket
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
         
   GenerateDescriptionFunction:
     Type: AWS::Serverless::Function
@@ -217,20 +247,22 @@ Resources:
               Resource:
                 - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
                 - !Sub arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
-        - Statement:
-            - Effect: Allow
-              Action: bedrock:ApplyGuardrail
-              Resource: !Sub arn:${AWS::Partition}:bedrock:us-east-1:${AWS::AccountId}:guardrail/0lk4bxdujw2r
       Timeout: 60
       Environment:
         Variables:
           BEDROCK_MODEL_ID: us.anthropic.claude-haiku-4-5-20251001-v1:0
           BEDROCK_MAX_TOKENS: "300"
           BEDROCK_TEMPERATURE: "0.7"
-          BEDROCK_GUARDRAIL_ID: "0lk4bxdujw2r"
-          BEDROCK_GUARDRAIL_VERSION: "1"
+          # S6 procesa atributos internos del catálogo. El guardrail se reserva
+          # para el asistente conversacional de S8, donde sí entra texto libre.
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
 
   IndexEmbeddingsFunction:
     Type: AWS::Serverless::Function
@@ -253,6 +285,12 @@ Resources:
           EMBED_MODEL_ID: amazon.titan-embed-text-v2:0
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
 
   SemanticSearchFunction:
     Type: AWS::Serverless::Function
@@ -276,6 +314,12 @@ Resources:
           SEARCH_TOP_K: "5"
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
   
   ShoppingAssistantFunction:
     Type: AWS::Serverless::Function
@@ -310,6 +354,12 @@ Resources:
           BEDROCK_GUARDRAIL_VERSION: "1"
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !GetAtt FrontendBucket.WebsiteURL
+          AllowMethods: [GET, POST]
+          AllowHeaders: [Content-Type]
+          MaxAge: 300
 
   FrontendBucket:
     Type: AWS::S3::Bucket

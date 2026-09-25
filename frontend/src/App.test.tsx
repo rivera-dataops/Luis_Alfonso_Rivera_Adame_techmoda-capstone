@@ -300,12 +300,9 @@ describe('App Component', () => {
       expect(api.createProduct).toHaveBeenCalledWith(mockProductInput);
     });
 
-    it('should show error alert when creation fails', async () => {
+    it('should keep the form open and show the error when creation fails', async () => {
       const user = userEvent.setup();
       vi.mocked(api.createProduct).mockRejectedValue(new Error('Creation failed'));
-
-      // Mock window.alert
-      const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
 
       render(<App />);
 
@@ -332,11 +329,9 @@ describe('App Component', () => {
       const createButton = screen.getByRole('button', { name: /crear/i });
       await user.click(createButton);
 
-      await waitFor(() => {
-        expect(alertMock).toHaveBeenCalledWith('Creation failed');
-      });
-
-      alertMock.mockRestore();
+      expect(await screen.findByRole('alert')).toHaveTextContent('Creation failed');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByLabelText(/nombre del producto/i)).toHaveValue(mockProductInput.name);
     });
   });
 

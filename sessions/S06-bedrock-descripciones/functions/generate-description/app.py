@@ -41,7 +41,7 @@ table = boto3.resource("dynamodb").Table(PRODUCTS_TABLE)
 def _response(status, body):
     return {
         "statusCode": status,
-        "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+        "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, ensure_ascii=False),
     }
 
@@ -118,6 +118,11 @@ def lambda_handler(event, context):
                 "guardrailVersion": GUARDRAIL_VERSION,
             }
         resp = bedrock.converse(**kwargs)
+        if resp.get("stopReason") in ("guardrail_intervened", "content_filtered"):
+            return _response(422, {
+                "error": "La protección de contenido detuvo esta descripción. Revisa los atributos del producto.",
+                "blocked": True, "saved": False,
+            })
         text = resp["output"]["message"]["content"][0]["text"].strip()
         usage = resp.get("usage", {})
     except Exception as e:  # noqa: BLE001
@@ -130,6 +135,9 @@ def lambda_handler(event, context):
                 "hint": "¿Habilitaste acceso al modelo en Bedrock > Model access (us-east-1)?",
             },
         )
+
+    if not text:
+        return _response(502, {"error": "El modelo no devolvió una descripción.", "saved": False})
 
     if save:
         table.update_item(

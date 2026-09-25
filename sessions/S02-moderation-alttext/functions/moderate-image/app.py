@@ -15,6 +15,7 @@ Dominio AIF-C01: D4 — Guidelines for Responsible AI (seguridad del contenido +
 
 import json
 import os
+from decimal import Decimal
 import urllib.request
 from urllib.parse import urlparse
 
@@ -31,7 +32,7 @@ table = boto3.resource("dynamodb").Table(PRODUCTS_TABLE)
 def _response(status, body):
     return {
         "statusCode": status,
-        "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+        "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, ensure_ascii=False),
     }
 
@@ -111,7 +112,9 @@ def lambda_handler(event, context):
     table.update_item(
         Key={"productId": product_id},
         UpdateExpression="SET moderationStatus = :s, moderationFlags = :f, altText = :a",
-        ExpressionAttributeValues={":s": status, ":f": flags, ":a": alt_text},
+        ExpressionAttributeValues={":s": status, ":f": [
+            {**flag, "confidence": Decimal(str(flag["confidence"]))} for flag in flags
+        ], ":a": alt_text},
     )
 
     return _response(

@@ -1,15 +1,17 @@
-import { X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import type { Product } from '../lib/types';
+import { ModalShell } from './ModalShell';
 
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (product: Omit<Product, 'productId' | 'createdAt' | 'updatedAt'>) => void;
+  onSave: (product: Omit<Product, 'productId' | 'createdAt' | 'updatedAt'>) => Promise<void> | void;
   product?: Product;
 }
 
 export function ProductModal({ isOpen, onClose, onSave, product }: ProductModalProps) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -20,6 +22,7 @@ export function ProductModal({ isOpen, onClose, onSave, product }: ProductModalP
   });
 
   useEffect(() => {
+    setError('');
     if (product) {
       setFormData({
         name: product.name,
@@ -41,9 +44,12 @@ export function ProductModal({ isOpen, onClose, onSave, product }: ProductModalP
     }
   }, [product, isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
+    if (saving) return;
+    setSaving(true); setError('');
+    try {
+    await onSave({
       name: formData.name,
       description: formData.description,
       price: parseFloat(formData.price),
@@ -52,25 +58,17 @@ export function ProductModal({ isOpen, onClose, onSave, product }: ProductModalP
       imageUrl: formData.imageUrl,
     });
     onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar. Intenta de nuevo.');
+    } finally { setSaving(false); }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-900">
-            {product ? 'Editar Producto' : 'Nuevo Producto'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
+    <ModalShell title={product ? 'Editar Producto' : 'Nuevo Producto'} onClose={() => { if (!saving) onClose(); }}>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <fieldset disabled={saving} className="space-y-4">
           <div>
             <label htmlFor="product-name" className="block text-sm font-medium text-gray-700 mb-1">
               Nombre del Producto
@@ -146,6 +144,10 @@ export function ProductModal({ isOpen, onClose, onSave, product }: ProductModalP
               <option value="Ropa">Ropa</option>
               <option value="Zapatos">Zapatos</option>
               <option value="Accesorios">Accesorios</option>
+              <option value="Vestidos">Vestidos</option>
+              <option value="Chaquetas">Chaquetas</option>
+              <option value="Calzado">Calzado</option>
+              {!['Ropa', 'Zapatos', 'Accesorios', 'Vestidos', 'Chaquetas', 'Calzado'].includes(formData.category) && <option value={formData.category}>{formData.category}</option>}
             </select>
           </div>
           <div>
@@ -174,11 +176,12 @@ export function ProductModal({ isOpen, onClose, onSave, product }: ProductModalP
               type="submit"
               className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
-              {product ? 'Actualizar' : 'Crear'}
+              {saving ? 'Guardando…' : product ? 'Actualizar' : 'Crear'}
             </button>
           </div>
+          </fieldset>
+          {error && <p role="alert" className="error-box">{error}</p>}
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
